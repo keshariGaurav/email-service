@@ -1,19 +1,17 @@
 package email
 
 import (
+	"email-service/config"
+	"email-service/internal/template"
 	"fmt"
 	"net/smtp"
-	"html/template"
-	"bytes"
-	"log"
-	"email-service/config"
 )
 
 func sendWithMailtrap(cfg config.Config, to, subject, templateName string, data map[string]string) error {
 	from := cfg.SenderEmail
 	auth := smtp.PlainAuth("", cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPHost)
 
-	htmlBody, err := RenderTemplate(templateName, data)
+	htmlBody, err := template.RenderTemplate(templateName, data)
 	if err != nil {
 		return err
 	}
@@ -26,20 +24,3 @@ func sendWithMailtrap(cfg config.Config, to, subject, templateName string, data 
 	return smtp.SendMail(addr, auth, from, []string{to}, msg)
 }
 
-func RenderTemplate(name string, data map[string]string) (string, error) {
-	tmplPath := fmt.Sprintf("templates/%s.html", name)
-	tmpl, err := template.ParseFiles(tmplPath)
-	if err != nil {
-		log.Println("Template parsing error:", err)
-		return "", err
-	}
-
-	var buf bytes.Buffer
-	err = tmpl.Execute(&buf, data)
-	if err != nil {
-		log.Println("Template execution error:", err)
-		return "", err
-	}
-
-	return buf.String(), nil
-}
