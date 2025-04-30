@@ -8,12 +8,6 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-type EmailPayload struct {
-	To       string            `json:"to"`
-	Subject  string            `json:"subject"`
-	Template string            `json:"template"`
-	Data     map[string]string `json:"data"`
-}
 type Producer struct {
 	channel   *amqp.Channel
 	queueName string

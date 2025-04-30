@@ -1,3 +1,62 @@
-<h1>Hello World!</h1>
-<p>Welcome to our application.</p>
-<p>To get started, please click the link below:</p>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Welcome to ForgeIt</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f5f7fa;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 600px;
+      background: #ffffff;
+      margin: 40px auto;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #2D3748;
+    }
+    p {
+      color: #4A5568;
+      line-height: 1.6;
+    }
+    .button {
+      margin-top: 20px;
+      display: inline-block;
+      background-color: #3182CE;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 30px;
+      font-size: 12px;
+      color: #A0AEC0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Welcome to ForgeIt, {{.name}}! 👋</h1>
+    <p>We’re excited to have you onboard. ForgeIt is where creators, builders, and developers come together to showcase their projects, collaborate, and grow.</p>
+
+    <p>To get started, visit your dashboard and start listing your awesome work or discover projects to contribute to.</p>
+
+    <a href="{{.login_url}}" class="button">Go to My Dashboard</a>
+
+    <p>Need help getting started? Just reply to this email or check out our help docs.</p>
+
+    <div class="footer">
+      &copy; {{.year}} ForgeIt. All rights reserved.
+    </div>
+  </div>
+</body>
+</html>
