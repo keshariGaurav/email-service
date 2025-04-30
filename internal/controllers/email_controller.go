@@ -4,6 +4,7 @@ import (
 	"email-service/config"
 	"email-service/internal/producer"
 	"email-service/internal/rabbitmq"
+	"email-service/structure"
 	"log"
 
 	"github.com/gofiber/fiber/v2"
@@ -20,12 +21,7 @@ func SendWelcomeEmail(c *fiber.Ctx) error {
 
 	prod := producer.NewProducer(rabbitConn.Channel, cfg.QueueName)
 
-	var emailData struct {
-		To       string `json:"to"`
-		Subject  string `json:"subject"`
-		Template string `json:"template"`
-		Data     map[string]string `json:"data"`
-	}
+	var emailData structure.EmailPayload
 
 	if err := c.BodyParser(&emailData); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})

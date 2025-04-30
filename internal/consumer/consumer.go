@@ -4,6 +4,7 @@ import (
 	"email-service/config"
 	"email-service/internal/email"
 	"email-service/internal/rabbitmq"
+	"email-service/structure"
 	"email-service/internal/retry"
 	"encoding/json"
 	"fmt"
@@ -12,12 +13,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-type EmailPayload struct {
-	To       string            `json:"to"`
-	Subject  string            `json:"subject"`
-	Template string            `json:"template"`
-	Data     map[string]string `json:"data"`
-}
+
 
 func ConsumeMessages(cfg config.Config) {
 	rabbitConn, err := rabbitmq.NewConnection(cfg.AmqpURL)
@@ -42,10 +38,8 @@ func ConsumeMessages(cfg config.Config) {
 	fmt.Println("Waiting for messages...", msgs)
 
 	for msg := range msgs {
-		fmt.Println("Received message:", string(msg.Body))
 		go func(d amqp.Delivery) {
-			var payload EmailPayload
-			fmt.Print(d.Body)
+			var payload structure.EmailPayload
 			if err := json.Unmarshal(d.Body, &payload); err != nil {
 				log.Println("Invalid payload:", err)
 				return
