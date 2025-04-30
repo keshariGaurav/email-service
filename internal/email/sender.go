@@ -1,6 +1,7 @@
 package email
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -30,6 +31,7 @@ func init() {
 // SendEmail decides which service (Mailtrap or SES) to use
 func SendEmail(cfg config.Config, to, subject, templateName string, data map[string]string) error {
 	log.Printf("Preparing to send email to: %s", to)
+	fmt.Print("sending email")
 
 	switch cfg.Env {
 	case "development":

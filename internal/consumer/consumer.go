@@ -1,14 +1,16 @@
 package consumer
 
 import (
-	"encoding/json"
-	"log"
-	amqp "github.com/rabbitmq/amqp091-go"
 	"email-service/config"
 	"email-service/internal/email"
+	"email-service/internal/rabbitmq"
 	"email-service/internal/retry"
-)
+	"encoding/json"
+	"fmt"
+	"log"
 
+	amqp "github.com/rabbitmq/amqp091-go"
+)
 
 type EmailPayload struct {
 	To       string            `json:"to"`
@@ -18,31 +20,32 @@ type EmailPayload struct {
 }
 
 func ConsumeMessages(cfg config.Config) {
-	conn, err := amqp.Dial(cfg.AmqpURL)
+	rabbitConn, err := rabbitmq.NewConnection(cfg.AmqpURL)
+	fmt.Println("RabbitMQ connection established")
 	if err != nil {
-		log.Fatal("Failed to connect to RabbitMQ:", err)
+		log.Fatal("Failed to establish RabbitMQ connection:", err)
 	}
-	defer conn.Close()
+	defer rabbitConn.Close()
 
-	ch, err := conn.Channel()
-	if err != nil {
-		log.Fatal("Failed to open channel:", err)
-	}
-	defer ch.Close()
-
-	q, err := ch.QueueDeclare(cfg.QueueName, true, false, false, false, nil)
-	if err != nil {
-		log.Fatal("Queue declare error:", err)
-	}
-
-	msgs, err := ch.Consume(q.Name, "", true, false, false, false, nil)
+	msgs, err := rabbitConn.Channel.Consume(
+		"email-queue", 
+		"",    // consumer tag
+		true,  // auto-ack
+		false, // exclusive
+		false, // no-local
+		false, // no-wait
+		nil,   // args
+	)
 	if err != nil {
 		log.Fatal("Failed to consume messages:", err)
 	}
+	fmt.Println("Waiting for messages...", msgs)
 
 	for msg := range msgs {
+		fmt.Println("Received message:", string(msg.Body))
 		go func(d amqp.Delivery) {
 			var payload EmailPayload
+			fmt.Print(d.Body)
 			if err := json.Unmarshal(d.Body, &payload); err != nil {
 				log.Println("Invalid payload:", err)
 				return
@@ -50,6 +53,7 @@ func ConsumeMessages(cfg config.Config) {
 
 			// Retry sending email with exponential backoff
 			retry.RetryWithBackoff(func() error {
+				fmt.Print("Sending email to:", payload.To)
 				return email.SendEmail(cfg, payload.To, payload.Subject, payload.Template, payload.Data)
 			}, 3)
 		}(msg)
