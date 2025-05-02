@@ -6,9 +6,11 @@ import (
 	"email-service/internal/rabbitmq"
 	"email-service/structure"
 	"log"
-
+	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 )
+
+var validate = validator.New()
 
 func SendWelcomeEmail(c *fiber.Ctx) error {
 	// Extract email data from request
@@ -26,8 +28,15 @@ func SendWelcomeEmail(c *fiber.Ctx) error {
 	if err := c.BodyParser(&emailData); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
 	}
+	if err := validate.Struct(emailData); err != nil {
+		log.Println("Validation failed:", err)
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
 
 	// Publish the email data to RabbitMQ
+	emailData.Template = "welcome"
+	emailData.Subject = "Welcome to Our Service"
 	err = prod.Publish(emailData)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to send email"})
