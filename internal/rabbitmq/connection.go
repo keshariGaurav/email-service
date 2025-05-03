@@ -131,31 +131,6 @@ func (c *Connection) Close() {
 	instance = nil
 }
 
-func (c *Connection) Publish(exchange, routingKey string, body []byte) error {
-	return c.Channel.Publish(
-		exchange,    // exchange
-		routingKey,  // routing key
-		false,       // mandatory
-		false,       // immediate
-		amqp.Publishing{
-			ContentType: "application/json",
-			Body:        body,
-		},
-	)
-}
-
-func (c *Connection) Consume(queue string) (<-chan amqp.Delivery, error) {
-	return c.Channel.Consume(
-		c.queueName, // use queue name from struct instead of parameter
-		"",    // consumer tag
-		true,  // auto-ack
-		false, // exclusive
-		false, // no-local
-		false, // no-wait
-		nil,   // args
-	)
-}
-
 // Add this method after the existing methods
 func (c *Connection) GetQueueName() string {
 	return c.queueName
