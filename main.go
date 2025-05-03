@@ -12,13 +12,13 @@ import (
 )
 
 var (
-	rabbitConn *rabbitmq.Connection
+	rabbitConn    *rabbitmq.Connection
 	emailProducer *producer.Producer
 )
 
 func main() {
 	cfg := config.LoadEnv()
-	
+
 	// Initialize RabbitMQ connection
 	var err error
 	rabbitConn, err = rabbitmq.NewConnection(cfg.AmqpURL)
