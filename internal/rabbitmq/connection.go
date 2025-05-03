@@ -1,6 +1,7 @@
 package rabbitmq
 
 import (
+	"context"
 	"log"
 	"sync"
 	"time"
@@ -15,6 +16,7 @@ type Connection struct {
 	amqpURL    string
 	notifyConn chan *amqp.Error
 	notifyChan chan *amqp.Error
+	ctx    		 context.Context
 }
 
 var (
@@ -64,6 +66,9 @@ func (c *Connection) connect() error {
 func (c *Connection) reconnectOnFailure() {
 	for {
 		select {
+		case <-c.ctx.Done():
+			log.Println("🛑 Stopping reconnect goroutine.")
+			return
 		case err := <-c.notifyConn:
 			log.Printf("🚨 RabbitMQ connection closed: %v. Reconnecting...", err)
 			c.reconnect()
@@ -75,15 +80,19 @@ func (c *Connection) reconnectOnFailure() {
 }
 
 func (c *Connection) reconnect() {
+	wait := time.Second
 	for {
-		time.Sleep(3 * time.Second)
-		log.Println("🔁 Attempting RabbitMQ reconnection...")
-		if err := c.connect(); err == nil {
-			log.Println("✅ Reconnected to RabbitMQ!")
+		err := c.connect()
+		if err == nil {
 			return
 		}
-		log.Println("❌ Reconnection failed. Retrying...")
-	}
+		log.Printf("Reconnection failed: %v. Retrying in %v...", err, wait)
+		time.Sleep(wait)
+		wait *= 2
+		if wait > 30*time.Second {
+			wait = 30 * time.Second
+		}
+}
 }
 
 func (c *Connection) Close() {
@@ -94,4 +103,29 @@ func (c *Connection) Close() {
 		_ = c.Conn.Close()
 	}
 	instance = nil
+}
+
+func (c *Connection) Publish(exchange, routingKey string, body []byte) error {
+	return c.Channel.Publish(
+		exchange,    // exchange
+		routingKey,  // routing key
+		false,       // mandatory
+		false,       // immediate
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        body,
+		},
+	)
+}
+
+func (c *Connection) Consume(queue string) (<-chan amqp.Delivery, error) {
+	return c.Channel.Consume(
+		queue, // queue
+		"",    // consumer tag
+		true,  // auto-ack
+		false, // exclusive
+		false, // no-local
+		false, // no-wait
+		nil,   // args
+	)
 }

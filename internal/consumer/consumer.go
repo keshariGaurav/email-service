@@ -16,22 +16,15 @@ import (
 
 
 func ConsumeMessages(cfg config.Config) {
-	rabbitConn, err := rabbitmq.NewConnection(cfg.AmqpURL)
+	connection, err := rabbitmq.NewConnection(cfg.AmqpURL)
 	fmt.Println("RabbitMQ connection established")
 	if err != nil {
 		log.Fatal("Failed to establish RabbitMQ connection:", err)
 	}
-	defer rabbitConn.Close()
+	defer connection.Close()
 
-	msgs, err := rabbitConn.Channel.Consume(
-		"email-queue", 
-		"",    // consumer tag
-		true,  // auto-ack
-		false, // exclusive
-		false, // no-local
-		false, // no-wait
-		nil,   // args
-	)
+	msgs, err := connection.Consume("email_queue")
+
 	if err != nil {
 		log.Fatal("Failed to consume messages:", err)
 	}

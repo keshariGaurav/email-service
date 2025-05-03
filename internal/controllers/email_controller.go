@@ -5,7 +5,9 @@ import (
 	"email-service/internal/producer"
 	"email-service/internal/rabbitmq"
 	"email-service/structure"
+	"context"
 	"log"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 )
@@ -21,7 +23,11 @@ func SendWelcomeEmail(c *fiber.Ctx) error {
 	}
 	defer rabbitConn.Close()
 
-	prod := producer.NewProducer(rabbitConn.Channel, cfg.QueueName)
+	prod, err := producer.NewProducer(rabbitConn.Channel, cfg.QueueName, "default-exchange", true)
+	if err != nil {
+		log.Println("Failed to create producer:", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to initialize producer"})
+	}
 
 	var emailData structure.EmailPayload
 
@@ -36,8 +42,8 @@ func SendWelcomeEmail(c *fiber.Ctx) error {
 
 	// Publish the email data to RabbitMQ
 	emailData.Template = "welcome"
-	emailData.Subject = "Welcome to Our Service"
-	err = prod.Publish(emailData)
+	ctx := context.Background()
+	err = prod.Publish(ctx, emailData)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to send email"})
 	}
