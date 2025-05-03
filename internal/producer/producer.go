@@ -11,13 +11,13 @@ import (
 
 type Producer struct {
 	channel   *amqp.Channel
-	exchange  string
 	queueName string
 	durable   bool
 }
 
-// NewProducer initializes a new Producer, declares the queue once, and optionally binds to an exchange.
-func NewProducer(ch *amqp.Channel, exchange, queueName string, durable bool) (*Producer, error) {
+// NewProducer initializes a new Producer and declares the queue once.
+func NewProducer(ch *amqp.Channel, queueName string, durable bool) (*Producer, error) {
+	// Declare the queue without exchange binding
 	_, err := ch.QueueDeclare(
 		queueName,
 		durable, // durable
@@ -30,41 +30,26 @@ func NewProducer(ch *amqp.Channel, exchange, queueName string, durable bool) (*P
 		return nil, fmt.Errorf("queue declare failed: %w", err)
 	}
 
-	// Bind the queue to an exchange if specified
-	if exchange != "" {
-		err = ch.QueueBind(
-			queueName, // queue name
-			queueName, // routing key
-			exchange,  // exchange
-			false,     // no-wait
-			nil,       // arguments
-		)
-		if err != nil {
-			return nil, fmt.Errorf("queue bind failed: %w", err)
-		}
-	}
-
-	log.Printf("✅ Producer initialized for queue [%s] and exchange [%s]", queueName, exchange)
+	log.Printf("✅ Producer initialized for queue [%s]", queueName)
 
 	return &Producer{
 		channel:   ch,
-		exchange:  exchange,
 		queueName: queueName,
 		durable:   durable,
 	}, nil
 }
 
-// Publish sends a JSON-encoded message to the queue or exchange.
+// Publish sends a JSON-encoded message to the queue.
 func (p *Producer) Publish(ctx context.Context, payload interface{}) error {
 	body, err := json.Marshal(payload)
-	if err != nil {
+	if (err != nil) {
 		return fmt.Errorf("marshal failed: %w", err)
 	}
 
 	err = p.channel.PublishWithContext(
 		ctx,
-		p.exchange,  // exchange name ("" for default)
-		p.queueName, // routing key
+		"",          // exchange (empty for direct queue publishing)
+		p.queueName, // routing key (queue name)
 		false,       // mandatory
 		false,       // immediate
 		amqp.Publishing{
@@ -76,6 +61,6 @@ func (p *Producer) Publish(ctx context.Context, payload interface{}) error {
 		return fmt.Errorf("publish failed: %w", err)
 	}
 
-	log.Printf("📤 Message published to exchange [%s], routing key [%s]", p.exchange, p.queueName)
+	log.Printf("📤 Message published to queue [%s]", p.queueName)
 	return nil
 }

@@ -1,11 +1,11 @@
 package controllers
 
 import (
+	"context"
 	"email-service/config"
 	"email-service/internal/producer"
 	"email-service/internal/rabbitmq"
 	"email-service/structure"
-	"context"
 	"log"
 
 	"github.com/go-playground/validator/v10"
@@ -23,7 +23,7 @@ func SendWelcomeEmail(c *fiber.Ctx) error {
 	}
 	defer rabbitConn.Close()
 
-	prod, err := producer.NewProducer(rabbitConn.Channel, cfg.QueueName, "default-exchange", true)
+	prod, err := producer.NewProducer(rabbitConn.Channel, "email_queue", true)
 	if err != nil {
 		log.Println("Failed to create producer:", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to initialize producer"})

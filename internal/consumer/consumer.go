@@ -4,16 +4,14 @@ import (
 	"email-service/config"
 	"email-service/internal/email"
 	"email-service/internal/rabbitmq"
-	"email-service/structure"
 	"email-service/internal/retry"
+	"email-service/structure"
 	"encoding/json"
 	"fmt"
 	"log"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
-
-
 
 func ConsumeMessages(cfg config.Config) {
 	connection, err := rabbitmq.NewConnection(cfg.AmqpURL)
@@ -23,12 +21,19 @@ func ConsumeMessages(cfg config.Config) {
 	}
 	defer connection.Close()
 
-	msgs, err := connection.Consume("email_queue")
-
+	msgs, err := connection.Channel.Consume(
+		connection.GetQueueName(), // use queue name from connection
+		"",    // consumer
+		true,  // auto-ack
+		false, // exclusive
+		false, // no-local
+		false, // no-wait
+		nil,   // args
+	)
 	if err != nil {
 		log.Fatal("Failed to consume messages:", err)
 	}
-	fmt.Println("Waiting for messages...", msgs)
+	fmt.Println("Waiting for messages...")
 
 	for msg := range msgs {
 		go func(d amqp.Delivery) {

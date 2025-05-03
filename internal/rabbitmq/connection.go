@@ -14,9 +14,11 @@ type Connection struct {
 	Conn       *amqp.Connection
 	Channel    *amqp.Channel
 	amqpURL    string
+	queueName  string        // Add queue name field
 	notifyConn chan *amqp.Error
 	notifyChan chan *amqp.Error
-	ctx    		 context.Context
+	ctx        context.Context
+	cancel     context.CancelFunc
 }
 
 var (
@@ -28,7 +30,13 @@ var (
 func NewConnection(amqpURL string) (*Connection, error) {
 	var err error
 	once.Do(func() {
-		conn := &Connection{amqpURL: amqpURL}
+		ctx, cancel := context.WithCancel(context.Background())
+		conn := &Connection{
+			amqpURL:    amqpURL,
+			queueName:  "email_queue", // Set default queue name
+			ctx:        ctx,
+			cancel:     cancel,
+		}
 		err = conn.connect()
 		if err == nil {
 			instance = conn
@@ -49,6 +57,21 @@ func (c *Connection) connect() error {
 
 	ch, err := conn.Channel()
 	if err != nil {
+		conn.Close()
+		return err
+	}
+
+	// Declare the queue
+	_, err = ch.QueueDeclare(
+		c.queueName, // name
+		true,        // durable
+		false,       // delete when unused
+		false,       // exclusive
+		false,       // no-wait
+		nil,         // arguments
+	)
+	if err != nil {
+		ch.Close()
 		conn.Close()
 		return err
 	}
@@ -80,7 +103,7 @@ func (c *Connection) reconnectOnFailure() {
 }
 
 func (c *Connection) reconnect() {
-	wait := time.Second
+	var wait time.Duration = time.Second
 	for {
 		err := c.connect()
 		if err == nil {
@@ -92,10 +115,13 @@ func (c *Connection) reconnect() {
 		if wait > 30*time.Second {
 			wait = 30 * time.Second
 		}
-}
+	}
 }
 
 func (c *Connection) Close() {
+	if c.cancel != nil {
+		c.cancel() // Cancel context to stop reconnect goroutine
+	}
 	if c.Channel != nil {
 		_ = c.Channel.Close()
 	}
@@ -120,7 +146,7 @@ func (c *Connection) Publish(exchange, routingKey string, body []byte) error {
 
 func (c *Connection) Consume(queue string) (<-chan amqp.Delivery, error) {
 	return c.Channel.Consume(
-		queue, // queue
+		c.queueName, // use queue name from struct instead of parameter
 		"",    // consumer tag
 		true,  // auto-ack
 		false, // exclusive
@@ -128,4 +154,9 @@ func (c *Connection) Consume(queue string) (<-chan amqp.Delivery, error) {
 		false, // no-wait
 		nil,   // args
 	)
+}
+
+// Add this method after the existing methods
+func (c *Connection) GetQueueName() string {
+	return c.queueName
 }
