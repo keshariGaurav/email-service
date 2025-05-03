@@ -1,6 +1,7 @@
 package rabbitmq
 
 import (
+	"context"
 	"log"
 	"sync"
 	"time"
@@ -13,8 +14,11 @@ type Connection struct {
 	Conn       *amqp.Connection
 	Channel    *amqp.Channel
 	amqpURL    string
+	queueName  string        // Add queue name field
 	notifyConn chan *amqp.Error
 	notifyChan chan *amqp.Error
+	ctx        context.Context
+	cancel     context.CancelFunc
 }
 
 var (
@@ -26,7 +30,13 @@ var (
 func NewConnection(amqpURL string) (*Connection, error) {
 	var err error
 	once.Do(func() {
-		conn := &Connection{amqpURL: amqpURL}
+		ctx, cancel := context.WithCancel(context.Background())
+		conn := &Connection{
+			amqpURL:    amqpURL,
+			queueName:  "email_queue", // Set default queue name
+			ctx:        ctx,
+			cancel:     cancel,
+		}
 		err = conn.connect()
 		if err == nil {
 			instance = conn
@@ -51,6 +61,21 @@ func (c *Connection) connect() error {
 		return err
 	}
 
+	// Declare the queue
+	_, err = ch.QueueDeclare(
+		c.queueName, // name
+		true,        // durable
+		false,       // delete when unused
+		false,       // exclusive
+		false,       // no-wait
+		nil,         // arguments
+	)
+	if err != nil {
+		ch.Close()
+		conn.Close()
+		return err
+	}
+
 	c.Conn = conn
 	c.Channel = ch
 	c.notifyConn = conn.NotifyClose(make(chan *amqp.Error))
@@ -64,6 +89,9 @@ func (c *Connection) connect() error {
 func (c *Connection) reconnectOnFailure() {
 	for {
 		select {
+		case <-c.ctx.Done():
+			log.Println("🛑 Stopping reconnect goroutine.")
+			return
 		case err := <-c.notifyConn:
 			log.Printf("🚨 RabbitMQ connection closed: %v. Reconnecting...", err)
 			c.reconnect()
@@ -75,18 +103,25 @@ func (c *Connection) reconnectOnFailure() {
 }
 
 func (c *Connection) reconnect() {
+	var wait time.Duration = time.Second
 	for {
-		time.Sleep(3 * time.Second)
-		log.Println("🔁 Attempting RabbitMQ reconnection...")
-		if err := c.connect(); err == nil {
-			log.Println("✅ Reconnected to RabbitMQ!")
+		err := c.connect()
+		if err == nil {
 			return
 		}
-		log.Println("❌ Reconnection failed. Retrying...")
+		log.Printf("Reconnection failed: %v. Retrying in %v...", err, wait)
+		time.Sleep(wait)
+		wait *= 2
+		if wait > 30*time.Second {
+			wait = 30 * time.Second
+		}
 	}
 }
 
 func (c *Connection) Close() {
+	if c.cancel != nil {
+		c.cancel() // Cancel context to stop reconnect goroutine
+	}
 	if c.Channel != nil {
 		_ = c.Channel.Close()
 	}
@@ -94,4 +129,34 @@ func (c *Connection) Close() {
 		_ = c.Conn.Close()
 	}
 	instance = nil
+}
+
+func (c *Connection) Publish(exchange, routingKey string, body []byte) error {
+	return c.Channel.Publish(
+		exchange,    // exchange
+		routingKey,  // routing key
+		false,       // mandatory
+		false,       // immediate
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        body,
+		},
+	)
+}
+
+func (c *Connection) Consume(queue string) (<-chan amqp.Delivery, error) {
+	return c.Channel.Consume(
+		c.queueName, // use queue name from struct instead of parameter
+		"",    // consumer tag
+		true,  // auto-ack
+		false, // exclusive
+		false, // no-local
+		false, // no-wait
+		nil,   // args
+	)
+}
+
+// Add this method after the existing methods
+func (c *Connection) GetQueueName() string {
+	return c.queueName
 }
