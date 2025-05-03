@@ -2,9 +2,7 @@ package controllers
 
 import (
 	"context"
-	"email-service/config"
 	"email-service/internal/producer"
-	"email-service/internal/rabbitmq"
 	"email-service/structure"
 	"log"
 
@@ -14,37 +12,32 @@ import (
 
 var validate = validator.New()
 
-func SendWelcomeEmail(c *fiber.Ctx) error {
-	// Extract email data from request
-	cfg := config.LoadEnv()
-	rabbitConn, err := rabbitmq.NewConnection(cfg.AmqpURL)
-	if err != nil {
-		log.Fatal("Failed to establish RabbitMQ connection:", err)
-	}
-	defer rabbitConn.Close()
+type EmailController struct {
+	producer *producer.Producer
+}
 
-	prod, err := producer.NewProducer(rabbitConn.Channel, "email_queue", true)
-	if err != nil {
-		log.Println("Failed to create producer:", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to initialize producer"})
+func NewEmailController(producer *producer.Producer) *EmailController {
+	return &EmailController{
+		producer: producer,
 	}
+}
 
+func (ec *EmailController) SendWelcomeEmail(c *fiber.Ctx) error {
 	var emailData structure.EmailPayload
-
 	if err := c.BodyParser(&emailData); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
 	}
 	if err := validate.Struct(emailData); err != nil {
-		log.Println("Validation failed:", err)
+		log.Printf("Validation failed: %v", err)
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
-
 
 	// Publish the email data to RabbitMQ
 	emailData.Template = "welcome"
 	ctx := context.Background()
-	err = prod.Publish(ctx, emailData)
+	err := ec.producer.Publish(ctx, emailData)
 	if err != nil {
+		log.Printf("Failed to publish message: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to send email"})
 	}
 
