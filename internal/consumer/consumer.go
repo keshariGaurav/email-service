@@ -3,11 +3,11 @@ package consumer
 import (
 	"email-service/config"
 	"email-service/internal/email"
+	customErrors "email-service/internal/errors"
 	"email-service/internal/rabbitmq"
 	"email-service/internal/retry"
 	"email-service/structure"
 	"encoding/json"
-	"fmt"
 	"log"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -15,39 +15,59 @@ import (
 
 func ConsumeMessages(cfg config.Config) {
 	connection, err := rabbitmq.NewConnection(cfg.AmqpURL)
-	fmt.Println("RabbitMQ connection established")
 	if err != nil {
-		log.Fatal("Failed to establish RabbitMQ connection:", err)
+		log.Fatalf("Failed to establish RabbitMQ connection: %v", err)
 	}
 	defer connection.Close()
 
 	msgs, err := connection.Channel.Consume(
-		connection.GetQueueName(), // use queue name from connection
+		connection.GetQueueName(),
 		"",    // consumer
-		true,  // auto-ack
+		false, // auto-ack set to false for manual acknowledgment
 		false, // exclusive
 		false, // no-local
 		false, // no-wait
 		nil,   // args
 	)
 	if err != nil {
-		log.Fatal("Failed to consume messages:", err)
+		log.Fatalf("Failed to consume messages: %v", err)
 	}
-	fmt.Println("Waiting for messages...")
+
+	log.Println("Consumer started, waiting for messages...")
 
 	for msg := range msgs {
-		go func(d amqp.Delivery) {
-			var payload structure.EmailPayload
-			if err := json.Unmarshal(d.Body, &payload); err != nil {
-				log.Println("Invalid payload:", err)
-				return
-			}
+		go processMessage(msg, cfg)
+	}
+}
 
-			// Retry sending email with exponential backoff
-			retry.RetryWithBackoff(func() error {
-				fmt.Print("Sending email to:", payload.To)
-				return email.SendEmail(cfg, payload.To, payload.Subject, payload.Template, payload.Data)
-			}, 3)
-		}(msg)
+func processMessage(msg amqp.Delivery, cfg config.Config) {
+	var payload structure.EmailPayload
+	if err := json.Unmarshal(msg.Body, &payload); err != nil {
+		log.Printf("Failed to unmarshal message: %v", err)
+		// Reject malformed messages without requeue
+		msg.Reject(false)
+		return
+	}
+
+	err := retry.RetryWithBackoff(func() error {
+		if err := email.SendEmail(cfg, payload.To, payload.Subject, payload.Template, payload.Data); err != nil {
+			if emailErr, ok := err.(*customErrors.EmailError); ok {
+				log.Printf("Email error: [%s] %s", emailErr.Operation, emailErr.Message)
+			}
+			return err
+		}
+		return nil
+	}, 3)
+
+	if err != nil {
+		log.Printf("Failed to process message after retries: %v", err)
+		// Message processing failed after retries - reject and requeue
+		msg.Reject(true)
+		return
+	}
+
+	// Acknowledge successful processing
+	if err := msg.Ack(false); err != nil {
+		log.Printf("Failed to acknowledge message: %v", err)
 	}
 }

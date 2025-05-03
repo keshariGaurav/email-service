@@ -2,6 +2,7 @@ package email
 
 import (
 	"email-service/config"
+	customErrors "email-service/internal/errors"
 	"email-service/internal/template"
 	"fmt"
 	"net/smtp"
@@ -13,7 +14,7 @@ func sendWithMailtrap(cfg config.Config, to, subject, templateName string, data 
 
 	htmlBody, err := template.RenderTemplate(templateName, data)
 	if err != nil {
-		return err
+		return customErrors.NewEmailError("Mailtrap", "template rendering failed", err)
 	}
 
 	msg := []byte(fmt.Sprintf(
@@ -21,6 +22,10 @@ func sendWithMailtrap(cfg config.Config, to, subject, templateName string, data 
 		to, subject, htmlBody))
 
 	addr := fmt.Sprintf("%s:%s", cfg.SMTPHost, cfg.SMTPPort)
-	return smtp.SendMail(addr, auth, from, []string{to}, msg)
+	if err := smtp.SendMail(addr, auth, from, []string{to}, msg); err != nil {
+		return customErrors.NewEmailError("Mailtrap", "SMTP send failed", err)
+	}
+
+	return nil
 }
 

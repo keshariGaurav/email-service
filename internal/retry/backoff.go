@@ -5,17 +5,23 @@ import (
 	"time"
 )
 
-func RetryWithBackoff(fn func() error, attempts int) {
+// RetryWithBackoff retries a function with exponential backoff
+func RetryWithBackoff(fn func() error, maxAttempts int) error {
+	var lastErr error
 	backoff := time.Second
 
-	for i := 0; i < attempts; i++ {
-		err := fn()
-		if err == nil {
-			log.Printf("Email sent successfully after %d retries.", i+1)
-			return
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if err := fn(); err != nil {
+			lastErr = err
+			log.Printf("Attempt %d/%d failed: %v", attempt, maxAttempts, err)
+			if attempt == maxAttempts {
+				break
+			}
+			time.Sleep(backoff)
+			backoff *= 2
+			continue
 		}
-		log.Printf("Retry %d failed: %v", i+1, err)
-		time.Sleep(backoff)
-		backoff *= 2
+		return nil
 	}
+	return lastErr
 }

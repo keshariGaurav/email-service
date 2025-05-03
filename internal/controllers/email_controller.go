@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	customErrors "email-service/internal/errors"
 	"email-service/internal/producer"
 	"email-service/structure"
 	"log"
@@ -24,22 +25,38 @@ func NewEmailController(producer *producer.Producer) *EmailController {
 
 func (ec *EmailController) SendWelcomeEmail(c *fiber.Ctx) error {
 	var emailData structure.EmailPayload
+
 	if err := c.BodyParser(&emailData); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request payload"})
-	}
-	if err := validate.Struct(emailData); err != nil {
-		log.Printf("Validation failed: %v", err)
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		log.Printf("Failed to parse request: %v", err)
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request format",
+		})
 	}
 
-	// Publish the email data to RabbitMQ
+	if err := validate.Struct(emailData); err != nil {
+		log.Printf("Validation error: %v", err)
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Validation failed",
+		})
+	}
+
 	emailData.Template = "welcome"
 	ctx := context.Background()
-	err := ec.producer.Publish(ctx, emailData)
-	if err != nil {
-		log.Printf("Failed to publish message: %v", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to send email"})
+	if err := ec.producer.Publish(ctx, emailData); err != nil {
+		if emailErr, ok := err.(*customErrors.EmailError); ok {
+			log.Printf("Email error: %v", emailErr)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error":   emailErr.Message,
+				"details": emailErr.Operation,
+			})
+		}
+		log.Printf("Unexpected error: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to process email request",
+		})
 	}
 
-	return c.JSON(fiber.Map{"message": "Email sent successfully"})
+	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{
+		"message": "Email queued successfully",
+	})
 }

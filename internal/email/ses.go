@@ -10,16 +10,15 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ses"
 	"github.com/aws/aws-sdk-go-v2/service/ses/types"
 
+	customErrors "email-service/internal/errors"
 	"email-service/internal/template"
 )
-
-
 
 func sendWithSES(cfg SESConfig, to, subject, templateName string, data map[string]string) error {
 	// Render HTML email body from template
 	htmlBody, err := template.RenderTemplate(templateName, data)
 	if err != nil {
-		return err
+		return customErrors.NewEmailError("SES", "template rendering failed", err)
 	}
 
 	// Load AWS config with static credentials
@@ -31,7 +30,7 @@ func sendWithSES(cfg SESConfig, to, subject, templateName string, data map[strin
 	)
 	if err != nil {
 		log.Println("Error loading AWS config:", err)
-		return err
+		return customErrors.NewEmailError("SES", "AWS configuration failed", err)
 	}
 
 	// Initialize SES client
@@ -61,9 +60,8 @@ func sendWithSES(cfg SESConfig, to, subject, templateName string, data map[strin
 	_, err = client.SendEmail(context.TODO(), input)
 	if err != nil {
 		log.Println("Error sending email through SES:", err)
-		return err
+		return customErrors.NewEmailError("SES", "email sending failed", err)
 	}
 
-	log.Printf("Email sent successfully to %s", to)
 	return nil
 }
