@@ -3,6 +3,8 @@ package main
 import (
 	"email-service/config"
 	"email-service/internal/consumer"
+
+	"email-service/internal/middleware"
 	"email-service/internal/producer"
 	"email-service/internal/rabbitmq"
 	"email-service/internal/routes"
@@ -39,8 +41,11 @@ func main() {
 	// Initialize Fiber app
 	app := fiber.New()
 
-	// Setup routes with producer
-	routes.EmailRoutes(app, emailProducer)
+	app.Use(middleware.CircuitBreakerMiddleware())
+
+	// Setup routes with producer and config
+	routes.EmailRoutes(app, emailProducer, cfg)
+	
 
 	// Start server
 	log.Fatal(app.Listen(":6000"))

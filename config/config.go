@@ -12,6 +12,10 @@ type Config struct {
 	AmqpURL       string
 	QueueName     string
 
+	// JWT Configuration
+	JWTSecret     string
+	JWTIssuer     string
+
 	// Mailtrap
 	SMTPHost      string
 	SMTPPort      string
@@ -35,6 +39,10 @@ func LoadEnv() Config {
 		Env:         os.Getenv("ENV"),
 		AmqpURL:     os.Getenv("AMQP_URL"),
 		QueueName:   os.Getenv("QUEUE_NAME"),
+
+		// JWT Config
+		JWTSecret:   os.Getenv("JWT_SECRET"),
+		JWTIssuer:   os.Getenv("JWT_ISSUER"),
 
 		SMTPHost:    os.Getenv("SMTP_HOST"),
 		SMTPPort:    os.Getenv("SMTP_PORT"),
