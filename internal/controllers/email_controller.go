@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	customErrors "email-service/internal/errors"
+	"email-service/internal/middleware"
 	"email-service/internal/producer"
 	"email-service/structure"
 	"log"
@@ -24,17 +25,25 @@ func NewEmailController(producer *producer.Producer) *EmailController {
 }
 
 func (ec *EmailController) SendWelcomeEmail(c *fiber.Ctx) error {
-	var emailData structure.EmailPayload
+	// Get JWT claims from context
+	claims, ok := c.Locals("claims").(*middleware.JWTClaims)
+	if !ok {
+		log.Printf("Failed to get JWT claims from context")
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Internal server error",
+		})
+	}
 
+	var emailData structure.EmailPayload
 	if err := c.BodyParser(&emailData); err != nil {
-		log.Printf("Failed to parse request: %v", err)
+		log.Printf("Failed to parse request from user %s: %v", claims.UserID, err)
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid request format",
 		})
 	}
 
 	if err := validate.Struct(emailData); err != nil {
-		log.Printf("Validation error: %v", err)
+		log.Printf("Validation error for user %s: %v", claims.UserID, err)
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Validation failed",
 		})
@@ -42,15 +51,20 @@ func (ec *EmailController) SendWelcomeEmail(c *fiber.Ctx) error {
 
 	emailData.Template = "welcome"
 	ctx := context.Background()
+	
+	// Add user context to logs
+	log.Printf("User %s with role %s is sending welcome email to %s", 
+		claims.UserID, claims.Role, emailData.To)
+
 	if err := ec.producer.Publish(ctx, emailData); err != nil {
 		if emailErr, ok := err.(*customErrors.EmailError); ok {
-			log.Printf("Email error: %v", emailErr)
+			log.Printf("Email error for user %s: %v", claims.UserID, emailErr)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error":   emailErr.Message,
 				"details": emailErr.Operation,
 			})
 		}
-		log.Printf("Unexpected error: %v", err)
+		log.Printf("Unexpected error for user %s: %v", claims.UserID, err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to process email request",
 		})
@@ -58,5 +72,6 @@ func (ec *EmailController) SendWelcomeEmail(c *fiber.Ctx) error {
 
 	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{
 		"message": "Email queued successfully",
+		"requestedBy": claims.UserID,
 	})
 }
