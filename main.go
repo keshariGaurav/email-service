@@ -3,11 +3,7 @@ package main
 import (
 	"email-service/config"
 	"email-service/internal/consumer"
-
-	"email-service/internal/middleware"
-	"email-service/internal/producer"
 	"email-service/internal/rabbitmq"
-	"email-service/internal/routes"
 	"log"
 
 	"github.com/gofiber/fiber/v2"
@@ -15,7 +11,7 @@ import (
 
 var (
 	rabbitConn    *rabbitmq.Connection
-	emailProducer *producer.Producer
+
 )
 
 func main() {
@@ -29,23 +25,11 @@ func main() {
 	}
 	defer rabbitConn.Close()
 
-	// Initialize producer
-	emailProducer, err = producer.NewProducer(rabbitConn.Channel, "email_queue", true)
-	if err != nil {
-		log.Fatal("Failed to create producer:", err)
-	}
-
 	// Start consumer in a goroutine
 	go consumer.ConsumeMessages(cfg)
 
 	// Initialize Fiber app
 	app := fiber.New()
-
-	app.Use(middleware.CircuitBreakerMiddleware())
-
-	// Setup routes with producer and config
-	routes.EmailRoutes(app, emailProducer, cfg)
-	
 
 	// Start server
 	log.Fatal(app.Listen(":6000"))

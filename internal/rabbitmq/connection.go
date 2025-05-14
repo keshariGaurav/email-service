@@ -33,7 +33,7 @@ func NewConnection(amqpURL string) (*Connection, error) {
 		ctx, cancel := context.WithCancel(context.Background())
 		conn := &Connection{
 			amqpURL:    amqpURL,
-			queueName:  "email_queue", // Set default queue name
+			queueName:  "email-queue", // Set default queue name
 			ctx:        ctx,
 			cancel:     cancel,
 		}

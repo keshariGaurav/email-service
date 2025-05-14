@@ -61,8 +61,8 @@ func processMessage(msg amqp.Delivery, cfg config.Config) {
 
 	if err != nil {
 		log.Printf("Failed to process message after retries: %v", err)
-		// Message processing failed after retries - reject and requeue
-		msg.Reject(true)
+		// Message processing failed after retries - reject and discard
+		msg.Reject(false)
 		return
 	}
 
