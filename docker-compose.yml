@@ -12,10 +12,10 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_REGION=${AWS_REGION}
-      - SMTP_HOST=sandbox.smtp.mailtrap.io
-      - SMTP_PORT=587
-      - SMTP_USER=f3665b216154ca
-      - SMTP_PASS=d449e5735c64be
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
     depends_on:
       - rabbitmq
     volumes:
